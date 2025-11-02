@@ -61,7 +61,13 @@ const Header = () => {
             <Button asChild variant={location.pathname === '/solda' ? 'default' : 'outline'}>
               <Link to="/solda">Solda</Link>
             </Button>
-            <Button variant="outline" onClick={() => runBackupOnce()}>Backup Agora</Button>
+            <Button
+              variant="outline"
+              className="bg-yellow-500 hover:bg-yellow-600 text-black border-yellow-600"
+              onClick={() => runBackupOnce()}
+            >
+              Backup Agora
+            </Button>
             <Button variant="outline" onClick={handleRestore}>Restaurar Backup</Button>
             {deferredPrompt && (
               <Button
