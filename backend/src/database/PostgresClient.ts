@@ -8,7 +8,12 @@ export const getPool = (): Pool => {
   if (!connectionString) {
     throw new Error('DATABASE_URL is not defined');
   }
-  pool = new Pool({ connectionString });
+  // Suporte a provedores que exigem SSL (ex: Neon). Se a URL incluir 'neon.tech' ou 'sslmode=require', habilitar SSL.
+  const needsSSL = /neon\.tech/i.test(connectionString) || /sslmode=require/i.test(connectionString);
+  pool = new Pool({
+    connectionString,
+    ssl: needsSSL ? { rejectUnauthorized: false } : undefined,
+  });
   return pool;
 };
 

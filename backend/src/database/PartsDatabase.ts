@@ -1,10 +1,6 @@
-// Deprecated SQLite-based PartsDatabase
-// Use Postgres via database/PostgresClient instead.
-
-class PartsDatabase {
+// Arquivo legado (SQLite no backend) descontinuado. Persistência migrada para Postgres (quando backend) ou IndexedDB (frontend).
+export default class PartsDatabase {
   static getInstance(): PartsDatabase {
-    throw new Error('PartsDatabase (SQLite) foi removido. Use Postgres via database/PostgresClient.');
+    throw new Error('PartsDatabase (SQLite) descontinuado. Use Postgres ou IndexedDB.');
   }
 }
-
-export default PartsDatabase;

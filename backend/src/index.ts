@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import partsRouter from './routes/parts';
 import weldingRouter from './routes/welding';
+import producaoRouter from './routes/producao';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -41,6 +42,7 @@ app.use((req, res, next) => {
 // Rotas
 app.use('/api/parts', partsRouter);
 app.use('/api/welding', weldingRouter);
+app.use('/api/producao', producaoRouter);
 
 // Rota de health check
 app.get('/health', (req, res) => {

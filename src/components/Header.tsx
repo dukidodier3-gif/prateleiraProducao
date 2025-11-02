@@ -1,8 +1,34 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { restoreBackupFromFile, runBackupOnce } from "@/lib/backup";
+import { toast } from "sonner";
 
 const Header = () => {
   const location = useLocation();
+  const handleRestore = async () => {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json';
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        try {
+          await restoreBackupFromFile(file);
+          toast.success('Backup restaurado com sucesso.');
+          // opcional: recarregar página para refletir mudanças
+          window.location.reload();
+        } catch (e) {
+          console.error(e);
+          toast.error('Falha ao restaurar backup.');
+        }
+      };
+      input.click();
+    } catch (e) {
+      console.error(e);
+      toast.error('Falha ao iniciar restauração.');
+    }
+  };
   return (
     <header className="border-b bg-card sticky top-0 z-10 shadow-sm">
       <div className="container mx-auto px-4 py-4">
@@ -24,6 +50,8 @@ const Header = () => {
             <Button asChild variant={location.pathname === '/solda' ? 'default' : 'outline'}>
               <Link to="/solda">Solda</Link>
             </Button>
+            <Button variant="outline" onClick={() => runBackupOnce()}>Backup Agora</Button>
+            <Button variant="outline" onClick={handleRestore}>Restaurar Backup</Button>
           </nav>
         </div>
       </div>

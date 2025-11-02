@@ -3,18 +3,19 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "electron/main.js",
   "scripts": {
-    "dev": "concurrently -k -n WEB,API -c cyan,magenta \"vite\" \"npm:dev:backend\"",
+    "dev": "concurrently -k -n WEB,API,APP -c cyan,magenta,yellow \"vite\" \"npm:dev:backend\" \"npm:dev:electron\"",
     "dev:all": "npm run dev",
     "dev:backend": "ts-node --project backend/tsconfig.json backend/src/index.ts",
-    
+    "dev:electron": "wait-on http://localhost:5173 http://localhost:3001 && electron .",
     "build": "vite build",
     "vercel-build": "npm run build",
   "migrate:sqlite-to-postgres": "node scripts/migrate-sqlite-to-postgres.cjs",
     "build:dev": "vite build --mode development",
     "build:frontend": "vite build",
     "build:backend": "tsc -p backend/tsconfig.json",
-  "dist": "npm run build:frontend && npm run build:backend",
+    "dist": "npm run build:frontend && npm run build:backend && electron-builder",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -48,7 +49,7 @@
     "@radix-ui/react-toggle-group": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@tanstack/react-query": "^5.83.0",
-    
+    "better-sqlite3": "^12.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -86,7 +87,8 @@
     "@vitejs/plugin-react-swc": "^3.11.0",
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.0.1",
-    
+    "electron": "^31.7.7",
+    "electron-builder": "^25.1.8",
     "eslint": "^9.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
@@ -106,6 +108,7 @@
     "productName": "Peca Manager Pro",
     "files": [
       "dist/**",
+      "electron/**",
       "backend/dist/**",
       "package.json"
     ],
