@@ -21,11 +21,9 @@ export function PersistenceMonitor() {
         quota
       });
 
-      // Mostrar warning se não persistido ou se uso > 80% da quota
+      // Mostrar aviso somente se uso > 90% da quota (sem alertar sobre persistência)
       const usagePercent = quota > 0 ? (usage / quota) * 100 : 0;
-      if (!result.persisted || usagePercent > 80) {
-        setShowWarning(true);
-      }
+      if (usagePercent > 90) setShowWarning(true);
     };
 
     checkStatus();
@@ -44,21 +42,10 @@ export function PersistenceMonitor() {
 
   return (
     <div className="fixed bottom-4 right-4 max-w-md z-50">
-      <Alert variant={status.persisted ? 'default' : 'destructive'}>
-        {status.persisted ? (
-          <CheckCircle2 className="h-4 w-4" />
-        ) : (
-          <AlertCircle className="h-4 w-4" />
-        )}
-        <AlertTitle>
-          {status.persisted ? 'Armazenamento Monitorado' : '⚠ Armazenamento Não Persistente'}
-        </AlertTitle>
+      <Alert>
+        <CheckCircle2 className="h-4 w-4" />
+        <AlertTitle>Armazenamento Monitorado</AlertTitle>
         <AlertDescription className="space-y-2">
-          {!status.persisted && (
-            <p className="text-sm">
-              O navegador pode limpar seus dados a qualquer momento. Faça backup regularmente.
-            </p>
-          )}
           {status.quota > 0 && (
             <p className="text-xs">
               Uso: {usageMB} MB / {quotaMB} MB ({usagePercent.toFixed(1)}%)

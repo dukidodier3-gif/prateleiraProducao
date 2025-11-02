@@ -28,10 +28,16 @@ export default defineConfig(({ mode }) => ({
         background_color: '#ffffff',
         icons: [
           {
+            src: '/Brucke.ico',
+            sizes: 'any',
+            type: 'image/x-icon',
+            purpose: 'any'
+          },
+          {
             src: '/placeholder.svg',
             sizes: 'any',
             type: 'image/svg+xml',
-            purpose: 'any maskable'
+            purpose: 'any'
           }
         ]
       },

@@ -7,6 +7,7 @@
   "theme_color": "#ffffff",
   "description": "Gestão de peças e envio para solda",
   "icons": [
-    { "src": "/placeholder.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "/Brucke.ico", "sizes": "any", "type": "image/x-icon", "purpose": "any" },
+    { "src": "/placeholder.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }
