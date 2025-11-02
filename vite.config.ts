@@ -38,7 +38,10 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
-        navigateFallback: '/index.html'
+        navigateFallback: '/index.html',
+        // ativar atualização imediata do SW em produção
+        clientsClaim: true,
+        skipWaiting: true
       }
     })
   ].filter(Boolean),
