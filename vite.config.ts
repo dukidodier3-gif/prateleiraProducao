@@ -15,24 +15,30 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
+      injectRegister: 'auto',
+      includeAssets: ['favicon.ico', 'robots.txt', 'Brucke.ico', 'placeholder.svg'],
       manifest: {
         name: 'Prateleira',
         short_name: 'Prateleira',
         description: 'Gestão de peças e envio para solda',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
         theme_color: '#ffffff',
+        background_color: '#ffffff',
         icons: [
           {
-            src: '/pwa-192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: '/pwa-512.png',
-            sizes: '512x512',
-            type: 'image/png'
+            src: '/placeholder.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
+            purpose: 'any maskable'
           }
         ]
+      },
+      workbox: {
+        cleanupOutdatedCaches: true,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
+        navigateFallback: '/index.html'
       }
     })
   ].filter(Boolean),

@@ -2,9 +2,20 @@ import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { restoreBackupFromFile, runBackupOnce } from "@/lib/backup";
 import { toast } from "sonner";
+import { useEffect, useState } from "react";
 
 const Header = () => {
   const location = useLocation();
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler as any);
+    return () => window.removeEventListener('beforeinstallprompt', handler as any);
+  }, []);
   const handleRestore = async () => {
     try {
       const input = document.createElement('input');
@@ -52,6 +63,26 @@ const Header = () => {
             </Button>
             <Button variant="outline" onClick={() => runBackupOnce()}>Backup Agora</Button>
             <Button variant="outline" onClick={handleRestore}>Restaurar Backup</Button>
+            {deferredPrompt && (
+              <Button
+                variant="default"
+                onClick={async () => {
+                  try {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                      toast.success('Instalação iniciada.');
+                    }
+                    setDeferredPrompt(null);
+                  } catch (err) {
+                    console.error(err);
+                    toast.error('Falha ao iniciar instalação.');
+                  }
+                }}
+              >
+                Instalar App
+              </Button>
+            )}
           </nav>
         </div>
       </div>
