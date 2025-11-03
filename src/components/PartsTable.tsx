@@ -61,7 +61,7 @@ const PartsTable = () => {
   const [sendToWeldingOpen, setSendToWeldingOpen] = useState(false);
   const [partialByOPOpen, setPartialByOPOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 30;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<null | "edit" | "delete">(null);
   const [pendingPart, setPendingPart] = useState<Part | null>(null);
