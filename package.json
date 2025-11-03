@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "concurrently -k -n WEB,API,APP -c cyan,magenta,yellow \"vite\" \"npm:dev:backend\" \"npm:dev:electron\"",
     "dev:all": "npm run dev",
+    "dev:web": "vite",
     "dev:backend": "ts-node --project backend/tsconfig.json backend/src/index.ts",
     "dev:electron": "wait-on http://localhost:5173 http://localhost:3001 && electron .",
     "build": "vite build",

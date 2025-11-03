@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useParts } from "@/hooks/use-parts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,6 +29,8 @@ import {
 } from "@/components/ui/select";
 import type { Part } from "./PartsTable";
 
+const LOCATION_REGEX = /^\d+P-\d+A-\d+N$/;
+
 const partSchema = z.object({
   code: z.string().min(1, "Código é obrigatório"),
   componentType: z.enum(["PLASMA", "TUBO", "COMPONENTES", "PONTEIRA", "REFORÇO"], {
@@ -37,7 +39,10 @@ const partSchema = z.object({
   orderNumber: z.string().min(1, "Número da OP é obrigatório"),
   itemQuantity: z.coerce.number().min(0, "Quantidade do item deve ser no mínimo 0"),
   orderQuantity: z.coerce.number().min(0, "Quantidade da OP deve ser no mínimo 0"),
-  location: z.string().min(1, "Posição é obrigatória"),
+  fator: z.coerce.number().min(1, "Fator deve ser no mínimo 1").default(1),
+  location: z.string()
+    .min(1, "Posição é obrigatória")
+    .refine((v) => LOCATION_REGEX.test(v), { message: "Use o padrão 3P-4A-2N" }),
   status: z.enum(["INCOMPLETO", "COMPLETO"], {
     required_error: "Status é obrigatório",
   }),
@@ -60,6 +65,15 @@ const PartDialog = ({
   initialData,
   mode,
 }: PartDialogProps) => {
+  const deletingRef = useRef(false);
+
+  const formatLocationFromDigits = (digits: string) => {
+    const d = digits.replace(/\D/g, "").slice(0, 3); // até 3 grupos (1 dígito por grupo)
+    if (d.length === 0) return "";
+    if (d.length === 1) return `${d[0]}P`;
+    if (d.length === 2) return `${d[0]}P-${d[1]}A`;
+    return `${d[0]}P-${d[1]}A-${d[2]}N`;
+  };
   const form = useForm<PartFormData>({
     resolver: zodResolver(partSchema),
     defaultValues: {
@@ -68,6 +82,7 @@ const PartDialog = ({
       orderNumber: "",
       itemQuantity: 0,
       orderQuantity: 0,
+      fator: 1,
       location: "",
       status: "INCOMPLETO",
     },
@@ -82,6 +97,7 @@ const PartDialog = ({
           orderNumber: initialData.orderNumber,
           itemQuantity: (initialData as any).itemQuantity ?? initialData.quantity,
           orderQuantity: (initialData as any).orderQuantity ?? initialData.quantity,
+          fator: (initialData as any).fator ?? 1,
           location: initialData.location,
           status: initialData.status,
         });
@@ -92,6 +108,7 @@ const PartDialog = ({
           orderNumber: "",
           itemQuantity: 0,
           orderQuantity: 0,
+          fator: 1,
           location: "",
           status: "INCOMPLETO",
         });
@@ -236,6 +253,22 @@ const PartDialog = ({
                 )}
               />
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="fator"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fator do Componente</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="1" placeholder="1" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div />
+            </div>
             <FormField
               control={form.control}
               name="location"
@@ -243,8 +276,43 @@ const PartDialog = ({
                 <FormItem>
                   <FormLabel>Posição na Prateleira</FormLabel>
                   <FormControl>
-                    <Input placeholder="A-12" {...field} />
+                    <Input
+                      placeholder="Ex: 3P-4A-2N"
+                      {...field}
+                      onKeyDown={(e) => {
+                        // Detectar deleção para não reformatar e permitir apagar livremente
+                        if (e.key === "Backspace" || e.key === "Delete") {
+                          deletingRef.current = true;
+                        }
+                      }}
+                      onKeyUp={() => {
+                        deletingRef.current = false;
+                      }}
+                      onChange={(e) => {
+                        const raw = (e.target.value || "").toUpperCase();
+                        if (deletingRef.current) {
+                          // Em deleção, não forçar máscara; apenas manter caracteres permitidos
+                          const safe = raw.replace(/[^0-9PAN-]/g, "");
+                          field.onChange(safe);
+                          return;
+                        }
+                        // Em digitação normal, montar máscara: 1º dígito + P, 2º + A, 3º + N
+                        const digits = raw.replace(/\D/g, "");
+                        const masked = formatLocationFromDigits(digits);
+                        field.onChange(masked);
+                      }}
+                      onBlur={(e) => {
+                        const val = (e.target.value || '').toUpperCase();
+                        const nums = (val.match(/\d+/g) || []).slice(0, 3);
+                        if (nums.length === 3) {
+                          const [p, a, n] = nums;
+                          const formatted = `${p}P-${a}A-${n}N`;
+                          if (formatted !== val) form.setValue('location', formatted, { shouldValidate: true });
+                        }
+                      }}
+                    />
                   </FormControl>
+                  <p className="text-xs text-muted-foreground">Formato: 3P-4A-2N (Prateleira-Coluna-Nível)</p>
                   <FormMessage />
                 </FormItem>
               )}

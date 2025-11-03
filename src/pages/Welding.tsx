@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useWeldingItems, useWeldingItemsByDate, useDeleteWeldingItem } from "@/hooks/use-welding";
 import { toast } from "sonner";
 import Header from "@/components/Header";
+import { Badge } from "@/components/ui/badge";
 
 const Welding = () => {
   const [filterEnabled, setFilterEnabled] = useState(false);
@@ -67,12 +68,13 @@ const Welding = () => {
       doc.setFontSize(14);
       doc.text(title, 14, 14);
 
-      const head = [["#", "Código", "OP", "Qtd OP", "Data de Envio"]];
+      const head = [["#", "Código", "OP", "QNTS ENGATES", "Tag", "Data de Envio"]];
       const body = items.map((item, index) => [
         String(index + 1),
         item.code,
         item.orderNumber,
-        String(item.orderQuantity),
+        item.conjuntos !== undefined ? String(item.conjuntos) : "-",
+        item.tag || "-",
         new Date(item.sentAt).toLocaleString('pt-BR')
       ]);
 
@@ -177,7 +179,8 @@ const Welding = () => {
                 <TableHead className="w-16">#</TableHead>
                 <TableHead>Código</TableHead>
                 <TableHead>Número OP</TableHead>
-                <TableHead>Quantidade OP</TableHead>
+                <TableHead>QNTS ENGATES</TableHead>
+                <TableHead>Tag</TableHead>
                 <TableHead>Data de Envio</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -204,7 +207,14 @@ const Welding = () => {
                     <TableCell className="font-mono font-medium">{item.code}</TableCell>
                     <TableCell className="font-mono">{item.orderNumber}</TableCell>
                     <TableCell>
-                      <span className="font-semibold">{item.orderQuantity}</span> un.
+                      {item.conjuntos !== undefined ? (
+                        <span className="font-semibold">{item.conjuntos}</span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {item.tag ? <Badge variant="outline">{item.tag.replace('_',' ')}</Badge> : <span className="text-muted-foreground">-</span>}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(item.sentAt)}

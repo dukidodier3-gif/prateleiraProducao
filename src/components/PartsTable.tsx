@@ -14,10 +14,13 @@ import { Badge } from "@/components/ui/badge";
 import PartDialog from "./PartDialog";
 import { toast } from "sonner";
 import { SendToWeldingDialog } from "./SendToWeldingDialog";
+import { WeldingPartialByOPDialog } from "./WeldingPartialByOPDialog";
+import CommentDialog from "@/components/CommentDialog";
 import { useCreatePart, useDeletePart, useParts, useUpdatePart, useDeletePartsByCode } from "@/hooks/use-parts";
-import { useAddWeldingItem } from "@/hooks/use-welding";
+import { useAddWeldingItem, useWeldingItems } from "@/hooks/use-welding";
 import PasswordConfirmDialog from "./PasswordConfirmDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { usePatchPart } from "@/hooks/use-parts";
 
 export interface Part {
   id: string;
@@ -26,6 +29,12 @@ export interface Part {
   orderNumber: string;
   // quantity representa a quantidade do item (alias de itemQuantity)
   quantity: number;
+  // fator do componente para cálculo no envio parcial/total
+  fator?: number;
+  // comentário/aviso da linha
+  comment?: string;
+  // qualidade visualizada/ajustada no grid
+  quality?: 'APROVADO' | 'REPROVADO' | '-';
   // Campos opcionais para exibir colunas separadas
   itemQuantity?: number;
   orderQuantity?: number;
@@ -41,6 +50,8 @@ const PartsTable = () => {
   const deletePart = useDeletePart();
   const deleteByCode = useDeletePartsByCode();
   const addWeldingItem = useAddWeldingItem();
+  const { data: weldingItems = [] } = useWeldingItems();
+  const patchPart = usePatchPart();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPart, setEditingPart] = useState<Part | null>(null);
@@ -48,6 +59,7 @@ const PartsTable = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [sendToWeldingOpen, setSendToWeldingOpen] = useState(false);
+  const [partialByOPOpen, setPartialByOPOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -55,6 +67,8 @@ const PartsTable = () => {
   const [pendingPart, setPendingPart] = useState<Part | null>(null);
   const [filterType, setFilterType] = useState<"TODOS" | Part["componentType"]>("TODOS");
   const [filterStatus, setFilterStatus] = useState<"TODOS" | Part["status"]>("TODOS");
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [commentTarget, setCommentTarget] = useState<Part | null>(null);
 
   // Geração de PDF das peças cadastradas no dia
   const isSameDayLocal = (a: Date, b: Date) =>
@@ -132,36 +146,7 @@ const PartsTable = () => {
     });
   };
 
-  const handleSendToWelding = async (code: string, password: string) => {
-    if (password !== "brucke") {
-      toast.error("Senha incorreta");
-      return;
-    }
-
-    // Buscar primeira peça com esse código para pegar OP e quantidade
-    const partWithCode = parts.find((p) => p.code === code);
-    
-    if (!partWithCode) {
-      toast.error(`Nenhuma peça encontrada com o código ${code}`);
-      return;
-    }
-
-    try {
-      // Enviar para solda
-      await addWeldingItem.mutateAsync({
-        code: partWithCode.code,
-        orderNumber: partWithCode.orderNumber,
-        orderQuantity: partWithCode.orderQuantity ?? partWithCode.quantity,
-      });
-
-      // Remover todas as peças com esse código
-      await deleteByCode.mutateAsync(code);
-      
-      setSendToWeldingOpen(false);
-    } catch (error) {
-      console.error("Erro ao enviar para solda:", error);
-    }
-  };
+  // fluxo de envio foi movido para dentro do próprio diálogo (parcial/total por engate)
 
   const openEditDialog = (part: Part) => {
     setPendingPart(part);
@@ -176,6 +161,17 @@ const PartsTable = () => {
 
   // Removido status de estoque do grid conforme solicitado
 
+  // Mapa de engates enviados por (code + OP)
+  const engatesPorEngate = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const w of weldingItems) {
+      const key = `${w.code}__${w.orderNumber}`;
+      const c = Number(w.conjuntos ?? 0);
+      m.set(key, (m.get(key) ?? 0) + (Number.isFinite(c) ? c : 0));
+    }
+    return m;
+  }, [weldingItems]);
+
   const filteredParts = useMemo(() => (parts || []).filter((part) => {
     const query = searchQuery.toLowerCase();
     const matchesQuery = (
@@ -187,8 +183,14 @@ const PartsTable = () => {
     );
     const matchesType = filterType === "TODOS" || part.componentType === filterType;
     const matchesStatus = filterStatus === "TODOS" || part.status === filterStatus;
-    return matchesQuery && matchesType && matchesStatus;
-  }), [parts, searchQuery, filterType, filterStatus]);
+    if (!(matchesQuery && matchesType && matchesStatus)) return false;
+    // Ocultar quando Solda/Qnt OP atingir ou ultrapassar 100%
+    const key = `${part.code}__${part.orderNumber}`;
+    const enviados = engatesPorEngate.get(key) ?? 0;
+    const qntOP = Number(part.orderQuantity ?? part.quantity ?? 0);
+    const concluido = qntOP > 0 && enviados >= qntOP;
+    return !concluido;
+  }), [parts, searchQuery, filterType, filterStatus, engatesPorEngate]);
 
   // Paginação
   const totalPages = Math.max(1, Math.ceil(filteredParts.length / itemsPerPage));
@@ -217,6 +219,9 @@ const PartsTable = () => {
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={handleGeneratePdfToday} className="gap-2">
             <FileDown className="w-4 h-4" /> Gerar PDF (Hoje)
+          </Button>
+          <Button variant="outline" onClick={() => setPartialByOPOpen(true)} className="gap-2">
+            <Flame className="w-4 h-4" /> Enviar parcial (OP)
           </Button>
           <Button variant="outline" onClick={() => setSendToWeldingOpen(true)} className="gap-2">
             <Flame className="w-4 h-4" /> Enviar para Solda
@@ -293,8 +298,9 @@ const PartsTable = () => {
               <TableHead>Tipo</TableHead>
               <TableHead>OP</TableHead>
               <TableHead>Qtd Item</TableHead>
-              <TableHead>Qtd OP</TableHead>
+              <TableHead>Solda / Qnt OP</TableHead>
               <TableHead>Posição</TableHead>
+              <TableHead>Qualidade</TableHead>
               <TableHead>Status Produção</TableHead>
               <TableHead>Cadastrado em</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -318,7 +324,7 @@ const PartsTable = () => {
             ) : (
               paginatedParts.map((part) => {
                 return (
-                  <TableRow key={part.id}>
+                  <TableRow key={part.id} className={part.comment ? "ring-2 ring-yellow-400" : undefined}>
                     <TableCell className="font-mono font-medium">{part.code}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{part.componentType}</Badge>
@@ -328,9 +334,46 @@ const PartsTable = () => {
                       <span className="font-semibold">{part.itemQuantity ?? part.quantity}</span> un.
                     </TableCell>
                     <TableCell>
-                      <span className="font-semibold">{part.orderQuantity ?? part.quantity}</span> un.
+                      {(() => {
+                        const key = `${part.code}__${part.orderNumber}`;
+                        const enviados = engatesPorEngate.get(key) ?? 0;
+                        const qntOP = Number(part.orderQuantity ?? part.quantity ?? 0);
+                        return (
+                          <span className="font-semibold">{enviados} / {qntOP}</span>
+                        );
+                      })()}
                     </TableCell>
-                    <TableCell className="font-medium">{part.location}</TableCell>
+                    <TableCell className="font-medium">
+                      {(() => {
+                        const raw = String(part.location || '').toUpperCase();
+                        const ok = /^\d+P-\d+A-\d+N$/.test(raw);
+                        if (ok) return <span className="inline-block min-w-[180px] font-semibold text-lg font-mono">{raw}</span>;
+                        const nums = (raw.match(/\d+/g) || []).slice(0, 3);
+                        if (nums.length === 3) {
+                          const [p, a, n] = nums;
+                          const formatted = `${p}P-${a}A-${n}N`;
+                          return <span className="inline-block min-w-[180px] font-semibold text-lg font-mono">{formatted}</span>;
+                        }
+                        return <span className="inline-block min-w-[180px] font-semibold text-lg font-mono">{raw}</span>;
+                      })()}
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={part.quality ?? '-'}
+                        onValueChange={(v) => patchPart.mutate({ id: part.id, patch: { quality: v as any } })}
+                      >
+                        <SelectTrigger className={
+                          part.quality === 'REPROVADO' ? 'border-red-500 text-red-700' : part.quality === 'APROVADO' ? 'border-green-500 text-green-700' : ''
+                        }>
+                          <SelectValue placeholder="-" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="-">-</SelectItem>
+                          <SelectItem value="APROVADO">APROVADO</SelectItem>
+                          <SelectItem value="REPROVADO">REPROVADO</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
                     <TableCell>
                       <Badge variant={part.status === "COMPLETO" ? "success" : "warning"}>
                         {part.status}
@@ -342,12 +385,21 @@ const PartsTable = () => {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
+                          variant="outline"
+                          size="sm"
+                          className={part.comment ? "border-yellow-500 text-yellow-700" : undefined}
+                          onClick={() => { setCommentTarget(part); setCommentOpen(true); }}
+                        >
+                          Aviso
+                        </Button>
+                        <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => openEditDialog(part)}
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
+                        {/* Envio parcial incorporado ao diálogo de envio total (por engate) */}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -407,7 +459,18 @@ const PartsTable = () => {
       <SendToWeldingDialog
         open={sendToWeldingOpen}
         onOpenChange={setSendToWeldingOpen}
-        onConfirm={handleSendToWelding}
+      />
+
+      <WeldingPartialByOPDialog
+        open={partialByOPOpen}
+        onOpenChange={setPartialByOPOpen}
+      />
+
+      <CommentDialog
+        open={commentOpen}
+        onOpenChange={setCommentOpen}
+        partId={commentTarget?.id || ''}
+        initialComment={commentTarget?.comment || ''}
       />
 
       {/* Confirmação por senha para editar/excluir */}

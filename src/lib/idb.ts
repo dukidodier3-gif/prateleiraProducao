@@ -2,7 +2,7 @@
 // Stores: parts, welding_items, ordens, itens_ordem
 
 const DB_NAME = 'prateleira-db';
-const DB_VERSION = 1;
+const DB_VERSION = 1; // Sem mudança estrutural de índices; adicionamos novos campos via migração lógica
 
 export type PartRecord = {
   id?: number; // autoincrement
@@ -14,6 +14,12 @@ export type PartRecord = {
   location: string;
   status: 'INCOMPLETO' | 'COMPLETO';
   createdAt: string;
+  // novo: fator do componente para envio parcial (default 1)
+  fator?: number;
+  // comentário/aviso exibido no grid (linha fica destacada quando presente)
+  comment?: string;
+  // qualidade: APROVADO | REPROVADO | '-' (padrão)
+  quality?: 'APROVADO' | 'REPROVADO' | '-';
 };
 
 export type WeldingItemRecord = {
@@ -22,6 +28,12 @@ export type WeldingItemRecord = {
   orderNumber: string;
   orderQuantity: number;
   sentAt: string;
+  // campos opcionais para envio parcial
+  conjuntos?: number;
+  fatorUsado?: number;
+  debito?: number;
+  // tag/origem do envio (ex.: DEMANDA, MERCADO_LIVRE, URGENCIA)
+  tag?: string;
 };
 
 export type OrdemRecord = {
@@ -130,6 +142,7 @@ export async function clearAll(storeName: string): Promise<void> {
 export const PartsStore = {
   async list(): Promise<PartRecord[]> {
     await maybeMigrateFromLocalStorage();
+    await ensureFatorDefault();
     const items = await getAll<PartRecord>('parts');
     // ordenar por createdAt desc
     return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -148,13 +161,20 @@ export const PartsStore = {
   async get(id: number): Promise<PartRecord | undefined> { return getById('parts', id); },
   async create(data: Omit<PartRecord, 'id' | 'createdAt'> & Partial<Pick<PartRecord, 'createdAt'>>): Promise<PartRecord> {
     const now = data.createdAt ?? new Date().toISOString();
-    const id = await add('parts', { ...data, createdAt: now });
-    return { id, ...(data as any), createdAt: now };
+    const id = await add('parts', { fator: 1, comment: data.comment ?? '', quality: data.quality ?? '-', ...data, createdAt: now });
+    return { id, fator: 1, comment: data.comment ?? '', quality: data.quality ?? '-', ...(data as any), createdAt: now };
   },
   async update(id: number, data: Omit<PartRecord, 'id' | 'createdAt'>): Promise<PartRecord | null> {
     const existing = await this.get(id);
     if (!existing) return null;
     const updated = { ...existing, ...data } as PartRecord;
+    await put('parts', updated);
+    return updated;
+  },
+  async patch(id: number, patch: Partial<PartRecord>): Promise<PartRecord | null> {
+    const existing = await this.get(id);
+    if (!existing) return null;
+    const updated = { ...existing, ...patch } as PartRecord;
     await put('parts', updated);
     return updated;
   },
@@ -196,6 +216,121 @@ export const WeldingStore = {
   },
   async delete(id: number): Promise<void> { await del('welding_items', id); }
 };
+
+// Engate = conjunto de componentes com mesmo code + orderNumber
+export async function getEngateComponents(code: string, orderNumber: string): Promise<PartRecord[]> {
+  const all = await PartsStore.list();
+  return all.filter(p => p.code === code && p.orderNumber === orderNumber);
+}
+
+export function computeEngateCapacity(components: PartRecord[]): number {
+  if (!components.length) return 0;
+  return components.reduce((min, p) => {
+    const fator = Math.max(1, Number(p.fator ?? 1));
+    const qty = Math.floor(Number(p.itemQuantity ?? 0) / fator);
+    return Math.min(min, qty);
+  }, Number.POSITIVE_INFINITY);
+}
+
+export async function sendEngateToWelding(params: { code: string; orderNumber: string; conjuntos: number; tag?: string }): Promise<{ totalDebito: number }> {
+  const { code, orderNumber, conjuntos, tag } = params;
+  const components = await getEngateComponents(code, orderNumber);
+  if (!components.length) throw new Error('Nenhum componente encontrado para este engate');
+
+  const capacidade = computeEngateCapacity(components);
+  if (conjuntos <= 0) throw new Error('Conjuntos deve ser maior que 0');
+  if (conjuntos > capacidade) throw new Error(`Conjuntos acima do possível. Máximo: ${capacidade}`);
+
+  // Debitar de todos os componentes
+  let totalDebito = 0;
+  for (const p of components) {
+    const fator = Math.max(1, Number(p.fator ?? 1));
+    const debito = fator * conjuntos;
+    totalDebito += debito;
+    const nextQty = (p.itemQuantity ?? 0) - debito;
+    if (nextQty < 0) throw new Error(`Estoque insuficiente para ${p.code}. Precisa ${debito}, tem ${p.itemQuantity ?? 0}`);
+  }
+
+  // Persistir alterações
+  for (const p of components) {
+    const fator = Math.max(1, Number(p.fator ?? 1));
+    const debito = fator * conjuntos;
+    await PartsStore.patch(p.id!, { itemQuantity: (p.itemQuantity ?? 0) - debito });
+  }
+
+  // Registrar um item agregado de envio
+  await WeldingStore.add({
+    code,
+    orderNumber,
+    orderQuantity: totalDebito,
+    conjuntos,
+    debito: totalDebito,
+    tag,
+  } as any);
+
+  return { totalDebito };
+}
+
+// Listar componentes por número da OP (independente do código)
+export async function getComponentsByOrderNumber(orderNumber: string): Promise<PartRecord[]> {
+  const all = await PartsStore.list();
+  return all.filter(p => p.orderNumber === orderNumber);
+}
+
+// Capacidade por OP: mínimo de floor(itemQuantity/fator) entre todos os itens da OP
+export function computeCapacityByOP(components: PartRecord[]): number {
+  if (!components.length) return 0;
+  return components.reduce((min, p) => {
+    const fator = Math.max(1, Number(p.fator ?? 1));
+    const qty = Math.floor(Number(p.itemQuantity ?? 0) / fator);
+    return Math.min(min, qty);
+  }, Number.POSITIVE_INFINITY);
+}
+
+// Envio parcial por OP: debita (fator * conjuntos) de TODOS os itens com a mesma OP
+export async function sendPartialByOrderNumber(params: { orderNumber: string; conjuntos: number; tag?: string }): Promise<{ totalDebito: number; itensAfetados: number }> {
+  const { orderNumber, conjuntos, tag } = params;
+  if (!orderNumber) throw new Error('Informe o número da OP');
+  if (!Number.isFinite(conjuntos) || conjuntos <= 0) throw new Error('Conjuntos deve ser maior que 0');
+  const components = await getComponentsByOrderNumber(orderNumber);
+  if (!components.length) throw new Error('Nenhum item encontrado para esta OP');
+
+  // Validar saldo suficiente em todos
+  for (const p of components) {
+    const fator = Math.max(1, Number(p.fator ?? 1));
+    const debito = fator * conjuntos;
+    const nextQty = (p.itemQuantity ?? 0) - debito;
+    if (nextQty < 0) {
+      const capacidade = computeCapacityByOP(components);
+      throw new Error(`Estoque insuficiente em ${p.code}. Máximo possível para esta OP: ${capacidade} conjunto(s).`);
+    }
+  }
+
+  // Aplicar débitos e acumular por código
+  let totalDebito = 0;
+  const byCode = new Map<string, number>();
+  for (const p of components) {
+    const fator = Math.max(1, Number(p.fator ?? 1));
+    const debito = fator * conjuntos;
+    totalDebito += debito;
+    await PartsStore.patch(p.id!, { itemQuantity: (p.itemQuantity ?? 0) - debito });
+    byCode.set(p.code, (byCode.get(p.code) || 0) + debito);
+  }
+
+  // Registrar um item por código para esta OP (mostra o código real na listagem)
+  for (const [code, debitoCode] of byCode.entries()) {
+    await WeldingStore.add({
+      code,
+      orderNumber,
+      orderQuantity: debitoCode,
+      conjuntos,
+      debito: debitoCode,
+      tag,
+    } as any);
+  }
+
+  return { totalDebito, itensAfetados: components.length };
+}
 
 export const ProducaoStore = {
   async listOrdens(): Promise<OrdemRecord[]> { return getAll('ordens'); },
@@ -250,6 +385,7 @@ async function maybeMigrateFromLocalStorage() {
         location: p.location,
         status: p.status,
         createdAt: p.createdAt ?? new Date().toISOString(),
+        fator: 1,
       };
       await add('parts', rec);
     }
@@ -257,4 +393,33 @@ async function maybeMigrateFromLocalStorage() {
   } catch (e) {
     // ignorar falha de migração
   }
+}
+
+// Migração leve: garantir fator=1 para peças existentes
+export async function ensureFatorDefault() {
+  const db = await openDB();
+  const tx = db.transaction('parts', 'readwrite');
+  const store = tx.objectStore('parts');
+  const all: PartRecord[] = await promisify(store.getAll() as IDBRequest<PartRecord[]>);
+  for (const p of all) {
+    if (p.fator === undefined || p.fator === null) {
+      p.fator = 1;
+      await promisify(store.put(p) as IDBRequest<IDBValidKey>);
+    }
+  }
+  // transação será concluída automaticamente após as operações
+}
+
+// Utilidades específicas para parcial
+export async function getPartById(id: number): Promise<PartRecord | undefined> {
+  return getById('parts', id);
+}
+
+export async function decrementItemQuantity(partId: number, amount: number): Promise<PartRecord | null> {
+  const existing = await getById<PartRecord>('parts', partId);
+  if (!existing) return null;
+  const nextQty = Math.max(0, (existing.itemQuantity ?? 0) - amount);
+  const updated = { ...existing, itemQuantity: nextQty } as PartRecord;
+  await put('parts', updated);
+  return updated;
 }

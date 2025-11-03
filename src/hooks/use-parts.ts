@@ -12,11 +12,14 @@ const toUI = (r: PartRecord): UIPart => ({
   componentType: r.componentType,
   orderNumber: r.orderNumber,
   quantity: r.itemQuantity,
+  fator: r.fator ?? 1,
   itemQuantity: r.itemQuantity,
   orderQuantity: r.orderQuantity,
   location: r.location,
   status: r.status,
   createdAt: r.createdAt,
+  comment: r.comment ?? '',
+  quality: (r as any).quality ?? '-',
 });
 
 const fromUI = (p: Omit<UIPart, 'id' | 'createdAt'> & Partial<Pick<UIPart, 'createdAt'>>): Omit<PartRecord, 'id'> => ({
@@ -25,9 +28,12 @@ const fromUI = (p: Omit<UIPart, 'id' | 'createdAt'> & Partial<Pick<UIPart, 'crea
   orderNumber: p.orderNumber,
   orderQuantity: (p as any).orderQuantity ?? p.quantity,
   itemQuantity: (p as any).itemQuantity ?? p.quantity,
+  fator: (p as any).fator ?? 1,
   location: p.location,
   status: p.status,
   createdAt: (p as any).createdAt ?? new Date().toISOString(),
+  comment: (p as any).comment ?? '',
+  quality: (p as any).quality ?? '-',
 });
 
 export const useParts = () => {
@@ -156,6 +162,26 @@ export const useDeletePartsByType = () => {
     onError: (e) => {
       console.error(e);
       toast.error('Erro ao remover peças.');
+    }
+  });
+};
+
+// Patch parcial (comentário/aviso)
+export const usePatchPart = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Partial<UIPart> }): Promise<UIPart> => {
+      const rec = await PartsStore.patch(Number(id), patch as any);
+      if (!rec) throw new Error('Peça não encontrada');
+      return toUI(rec);
+    },
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: PARTS_QUERY_KEY });
+      queryClient.setQueryData([...PARTS_QUERY_KEY, updated.id], updated);
+    },
+    onError: (e) => {
+      console.error(e);
+      toast.error('Erro ao atualizar comentário.');
     }
   });
 };

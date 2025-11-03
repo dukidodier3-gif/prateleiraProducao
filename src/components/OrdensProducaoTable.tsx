@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Label } from './ui/label';
 import { useToast } from './ui/use-toast';
 import { Card } from './ui/card';
+import { Badge } from './ui/badge';
 
 export function OrdensProducaoTable() {
-    const { ordens, loading, criarOP, adicionarQuantidade, enviarParaSolda, carregarOrdens } = useOrdemProducao();
+    const { ordens, loading, mode, criarOP, adicionarQuantidade, enviarParaSolda, carregarOrdens } = useOrdemProducao();
     const { toast } = useToast();
     const [openDialog, setOpenDialog] = useState<'nova-op' | 'quantidade' | 'enviar' | null>(null);
     const [selectedOP, setSelectedOP] = useState<number | null>(null);
@@ -68,6 +69,10 @@ export function OrdensProducaoTable() {
             <Card className="p-6">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold">Ordens de Produção</h2>
+                    <div className="flex items-center gap-2">
+                        <Badge variant="outline">Modo: {mode === 'backend' ? 'BACKEND' : 'FRONTEND'}</Badge>
+                        <Button size="sm" variant="outline" onClick={() => carregarOrdens()}>Recarregar</Button>
+                    </div>
                 </div>
 
                 <Table>
@@ -81,6 +86,23 @@ export function OrdensProducaoTable() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
+                        {loading && (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-muted-foreground py-6">Carregando...</TableCell>
+                            </TableRow>
+                        )}
+                        {!loading && ordens.length === 0 && (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-muted-foreground py-6">
+                                    Nenhuma OP encontrada.
+                                    <br />
+                                    Dica: Cadastre peças com um Número de OP na Home para o modo FRONTEND montar este painel.
+                                    {" "}Se usa BACKEND, verifique se a API 
+                                    <span className="font-mono"> /api/producao </span>
+                                    está respondendo.
+                                </TableCell>
+                            </TableRow>
+                        )}
                         {ordens.map(op => (
                             <TableRow key={op.id}>
                                 <TableCell>{op.codigo}</TableCell>
