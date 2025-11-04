@@ -346,12 +346,12 @@ const PartsTable = () => {
                     <TableCell className="font-medium">
                       {(() => {
                         const raw = String(part.location || '').toUpperCase();
-                        const ok = /^\d+P-\d+A-\d+N$/.test(raw);
+                        const ok = /^\d+P-\d+C-\d+N$/.test(raw);
                         if (ok) return <span className="inline-block min-w-[180px] font-semibold text-lg font-mono">{raw}</span>;
                         const nums = (raw.match(/\d+/g) || []).slice(0, 3);
                         if (nums.length === 3) {
-                          const [p, a, n] = nums;
-                          const formatted = `${p}P-${a}A-${n}N`;
+                          const [p, c, n] = nums;
+                          const formatted = `${p}P-${c}C-${n}N`;
                           return <span className="inline-block min-w-[180px] font-semibold text-lg font-mono">{formatted}</span>;
                         }
                         return <span className="inline-block min-w-[180px] font-semibold text-lg font-mono">{raw}</span>;

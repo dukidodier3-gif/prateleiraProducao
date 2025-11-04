@@ -292,7 +292,7 @@ const PartDialog = ({
                         const raw = (e.target.value || "").toUpperCase();
                         if (deletingRef.current) {
                           // Em deleção, não forçar máscara; apenas manter caracteres permitidos
-                          const safe = raw.replace(/[^0-9PAN-]/g, "");
+                          const safe = raw.replace(/[^0-9PCN-]/g, "");
                           field.onChange(safe);
                           return;
                         }
@@ -305,8 +305,8 @@ const PartDialog = ({
                         const val = (e.target.value || '').toUpperCase();
                         const nums = (val.match(/\d+/g) || []).slice(0, 3);
                         if (nums.length === 3) {
-                          const [p, a, n] = nums;
-                          const formatted = `${p}P-${a}A-${n}N`;
+                          const [p, c, n] = nums;
+                          const formatted = `${p}P-${c}C-${n}N`;
                           if (formatted !== val) form.setValue('location', formatted, { shouldValidate: true });
                         }
                       }}
