@@ -1,0 +1,13 @@
+{
+  "name": "Prateleira",
+  "short_name": "Prateleira",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "description": "Gestão de peças e envio para solda",
+  "icons": [
+    { "src": "/Brucke.ico", "sizes": "any", "type": "image/x-icon", "purpose": "any" },
+    { "src": "/placeholder.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
